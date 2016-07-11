@@ -1,0 +1,96 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Jul 03 13:45:55 2016
+
+@author: vskritsky
+"""
+"""This code runs on both Python 2.7 and 3.5"""
+import pandas as pd
+import numpy as np
+import os
+
+list_=[]
+frame=pd.DataFrame()
+iter_numb=[]
+
+###Here it detects recursevly all the .csv files and 
+###creates all files structure as ladder
+for root, dirs, files in os.walk("data",topdown=False):
+    for name in files:
+        path=os.path.join(root, name)
+        for file_ in path:
+            df = pd.read_csv(path,index_col=None, 
+                             keep_default_na=False,
+                             na_values=[""], header=1)
+                             
+###We want single stimulus column, server_time as index
+###and multiple IBT to calculate the pandas.mean() function
+            if len(df.columns)>=3:
+                df.columns=['IBT_time','GSR','IBT']
+                #df['IBT_time']=pd.to_datetime(df['IBT_time'],unit='s')
+                #list_.append(df['IBT_time'])
+                list_.append(df['IBT'])
+                #print(df['IBT'])
+                break
+            elif len(df.columns)<3:
+                df.columns=['server_time','stimulus']
+                if len(iter_numb)>=1:
+                    break
+                else:
+                    list_.append(df['server_time'])
+                    list_.append(df['stimulus'])
+                    iter_numb.append(1)
+                    break
+            else:
+                break
+            
+#Merge the list of dataframes to one
+frame=pd.concat(list_,axis=1,ignore_index=False)
+frame.interpolate(method='nearest',axis=0).ffill().bfill()
+#Set strings to be formatted datetime
+frame['server_time']=pd.to_datetime(df['server_time'],
+                        format="%Y-%m-%d %H:%M:%S.%f",
+                        errors='ignore')
+                        
+#Some make up to make more visible columns/indexes
+frame.reindex(df['server_time'])
+frame=frame[['server_time','stimulus','IBT']]
+pd.set_option('display.expand_frame_repr', False)
+frame.columns=['tester({})'.format(i) for
+            i in range(len(frame.columns))]
+frame.index=['stimulus({})'.format(j) for
+            j in range(len(frame.index))]
+frame.rename(columns={'tester(0)': 'server_time'}, inplace=True)
+    
+"""Cleaning noise values out of range 600-1200" not to affect
+average result, they are substituted with NumPy NaN."""
+###Please take into account that many files are empty, inconsistent
+###or having some other defects, however it does not affect the result
+frame[frame.ix[:,2:]>1200]=np.NaN
+frame[frame.ix[:,2:]<550]=np.NaN
+
+"""Here worked stopped as average column wasn't calculated
+as NaN values could not be converted to integers"""
+#mean=frame.mean(frame.ix[:,2:])
+    
+"""You can see the asynchronous time flow in Series, one
+of ways to solve it is using NumPy.searchsorted, or using
+relative time for every event. Such as starting counting 
+from 0 and going to the end, or handling missing data with
+Pandas Nan and filling them based on looping relative time
+between all the rows consecutively, until next row will not
+be correspondingly appended."""
+    
+print(frame.ix[300:350])
+
+"""Last part was supposed to implement RMSSD algorithm
+into code and to navigate through average values in order
+to find trends based on stimulus. None of existent 
+Python implementations were attractive, so decided to 
+transform RMSSD by my own, however not enough time"""
+
+
+"""This task could be much more accurate and effective
+solved by the Restricted Boltzmann machine or some other
+RNN. However there were a heavy restriction on time to
+organize somehow the data"""
